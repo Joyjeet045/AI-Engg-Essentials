@@ -1,0 +1,6 @@
+__pycache__/
+*.py[cod]
+
+# transient terminal capture
+stdout.txt
+stderr.txt
