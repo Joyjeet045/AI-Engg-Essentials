@@ -465,6 +465,9 @@ def main():
     print("  a cached block holds K/V for exactly the tokens its hash covers, so")
     print("  reusing it is arithmetically the same as recomputing it")
 
+    if not identical:
+        raise SystemExit("a cache hit returned different K/V; the hashing is wrong")
+
 
 if __name__ == "__main__":
     main()

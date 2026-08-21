@@ -308,7 +308,8 @@ class TinyLM(nn.Module):
         offset = caches[0].length if caches else 0
         positions = torch.arange(offset, offset + input_ids.shape[1], device=input_ids.device)
         x = self.token_emb(input_ids) + self.pos_emb(positions)
-        for block, cache in zip(self.blocks, caches or [None] * len(self.blocks)):
+        for block, cache in zip(self.blocks, caches or [None] * len(self.blocks),
+                                strict=True):
             x = block(x, cache)
         return self.lm_head(self.ln_f(x))
 
@@ -412,9 +413,11 @@ def main():
     print(f"  {'fp32':<18}{fp32_weights / 2**20:>12.2f}{'1.0x':>10}{'100.0%':>12}"
           f"{0.0:>11.1e}{decode_speed(model, tokens[:64]):>9.1f}")
 
+    qualities = {}
     for bits, group in ((8, 64), (4, 64), (4, 16)):
         quantized = quantize_weights(model, bits, group)
         quality = compare(reference, quantized(ids)[0])
+        qualities[(bits, group)] = quality
         size = linear_bytes(quantized)
         print(f"  {f'int{bits}, group {group}':<18}{size / 2**20:>12.2f}"
               f"{f'{fp32_weights / size:.1f}x':>10}{quality.top1:>12.1%}"
@@ -433,6 +436,7 @@ def main():
     for bits in (8, 4):
         caches = model.make_caches(len(tokens), bits)
         quality = compare(fp32_cached, model(ids, caches)[0])
+        qualities[f"kv{bits}"] = quality
         per_token = caches[0].bytes_per_token * len(model.blocks)
         print(f"  {f'int{bits} per token':<18}{per_token:>12}"
               f"{f'{fp32_per_token / per_token:.1f}x':>10}{quality.top1:>12.1%}"
@@ -449,6 +453,12 @@ def main():
     print("int4 needs small groups to stay usable, and the scales then eat into the")
     print("saving. tok/s goes down because dequantizing into fp32 and calling the")
     print("normal matmul is strictly more work -- the latency win needs a fused kernel.")
+
+    # int8 is meant to be effectively lossless; anything worse means the scales,
+    # the packing or the group layout is wrong rather than merely imprecise.
+    for name, floor in ((( 8, 64), 0.999), ("kv8", 0.99)):
+        if qualities[name].top1 < floor or qualities[name].kl > 1e-3:
+            raise SystemExit(f"int8 path degraded too far: {name} -> {qualities[name]}")
 
 
 if __name__ == "__main__":

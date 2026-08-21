@@ -190,6 +190,7 @@ def main():
           f"d_k {d_k}, page {BLOCK_SIZE}")
     print(backend)
 
+    worst_error = 0.0
     for seq_q, context in ((1, 4096), (128, 4096), (1, 16384)):
         phase = "decode" if seq_q == 1 else "prefill chunk"
         print()
@@ -197,6 +198,7 @@ def main():
         print(f"  {'':<26}{'max |err|':>12}{'peak temp':>12}{'smaller':>10}{'time':>11}")
         for label, error, peak, ratio, seconds in run_case(n, heads, num_kv_heads, d_k,
                                                            seq_q, context, tiles):
+            worst_error = max(worst_error, error)
             print(f"  {label:<26}{error:>12.2e}{peak / 2**20:>11.2f}M"
                   f"{ratio:>9.0f}x{seconds * 1e3:>9.2f}ms")
 
@@ -206,6 +208,10 @@ def main():
     print("Memory follows the tile and ignores the context, which is the point.")
     print("Small tiles are slower only because the loop is Python; a Triton or CUDA")
     print("kernel keeps the tile in SRAM and never writes it out at all.")
+
+    # Anything above fp32 rounding means the online rescale is wrong, not imprecise.
+    if worst_error > 1e-5:
+        raise SystemExit(f"streaming attention drifted from the reference: {worst_error:.2e}")
 
 
 if __name__ == "__main__":

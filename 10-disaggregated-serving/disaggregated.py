@@ -322,7 +322,7 @@ def run_colocated(model, requests, max_batch=4):
         # Serialised on one device, so a long prefill delays every running decode.
         clock += decode_seconds + prefill_seconds
 
-        for seq, token in zip(running, outputs):
+        for seq, token in zip(running, outputs, strict=True):
             seq.last_token = token
             seq.request.record(token, clock)
         if pending is not None:
@@ -382,7 +382,7 @@ def run_disaggregated(model, requests, prefill_slots=1, decode_slots=4):
         # Separate devices, so the two pools overlap instead of queueing.
         clock += max(decode_seconds, prefill_seconds)
 
-        for seq, token in zip(running, outputs):
+        for seq, token in zip(running, outputs, strict=True):
             seq.last_token = token
             seq.request.record(token, clock)
 
@@ -469,6 +469,9 @@ def main():
           f"{reports[0].decode_seconds / total:.0%} decode")
     print("with long prompts the prefill share is large, and every second of it is")
     print("a second the colocated decode batch spends frozen")
+
+    if not identical:
+        raise SystemExit("the decode pool diverged; the KV transfer is wrong")
 
 
 if __name__ == "__main__":

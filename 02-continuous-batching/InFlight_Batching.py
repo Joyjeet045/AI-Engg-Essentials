@@ -426,14 +426,17 @@ def main():
 
     reference = runs[0].outputs
     identical = all(r.outputs == reference for r in runs[1:])
-    print(f"speedup vs static: "
+    print("speedup vs static: "
           + ", ".join(f"{r.label} {runs[0].wall_time / r.wall_time:.2f}x" for r in runs[1:]))
-    print(f"wasted row-steps : "
+    print("wasted row-steps : "
           + ", ".join(f"{r.label} {r.row_steps - r.useful_row_steps}" for r in runs))
     print(f"identical output : {identical}")
     print(f"slot cache       : {model.cache_nbytes() / 2**20:.1f} MiB reserved for "
           f"{max_batch} x {max_seq_len} tokens, "
           f"{prompt_tokens + output_tokens} tokens ever live")
+
+    if not identical:
+        raise SystemExit("scheduling changed the output; the slot masking is wrong")
 
 
 if __name__ == "__main__":

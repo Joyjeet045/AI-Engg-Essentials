@@ -200,7 +200,8 @@ class TinyLM(nn.Module):
         positions = torch.arange(offset, offset + input_ids.shape[1], device=input_ids.device)
 
         x = self.token_emb(input_ids) + self.pos_emb(positions)
-        for block, cache in zip(self.blocks, caches or [None] * len(self.blocks)):
+        for block, cache in zip(self.blocks, caches or [None] * len(self.blocks),
+                                strict=True):
             x = block(x, cache)
         return self.lm_head(self.ln_f(x))
 
@@ -536,6 +537,9 @@ def main():
     print(f"identical output : {identical}")
     print("  greedy verification only accepts a proposal equal to the target's own")
     print("  argmax, so speculation changes the cost and never the answer")
+
+    if not identical:
+        raise SystemExit("speculation diverged; the accept rule or rollback is wrong")
 
 
 if __name__ == "__main__":

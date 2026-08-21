@@ -176,7 +176,8 @@ class TinyLM(nn.Module):
         )
 
         x = self.token_emb(input_ids) + self.pos_emb(positions)
-        for block, cache in zip(self.blocks, caches or [None] * len(self.blocks)):
+        for block, cache in zip(self.blocks, caches or [None] * len(self.blocks),
+                                strict=True):
             x = block(x, cache)
 
         # Projecting only the last row skips a [seq_len, vocab] matmul per step.
@@ -284,13 +285,17 @@ def main():
     print(f"{'KV cache':<16}{result.wall_time:>8.2f}s{result.ttft * 1e3:>9.1f}ms"
           f"{result.tpot * 1e3:>9.2f}ms{result.num_generated / result.wall_time:>11.1f}")
     print()
+    identical = torch.equal(uncached_ids, result.tokens)
     print(f"speedup          : {uncached_time / result.wall_time:.1f}x")
-    print(f"identical output : {torch.equal(uncached_ids, result.tokens)}")
+    print(f"identical output : {identical}")
     print(f"KV per token     : {per_token} B "
           f"({attn.num_heads} q-heads / {attn.num_kv_heads} kv-heads, "
           f"{mha_per_token / per_token:.0f}x smaller than MHA)")
     print(f"cache allocated  : {sum(c.nbytes for c in caches) / 1024:.1f} KiB "
           f"for {max_seq_len} tokens, written in place")
+
+    if not identical:
+        raise SystemExit("caching changed the output; that is a bug, not a tradeoff")
 
 
 if __name__ == "__main__":

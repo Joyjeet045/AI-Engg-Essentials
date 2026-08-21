@@ -1,0 +1,29 @@
+name: projects
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          pip install --index-url https://download.pytorch.org/whl/cpu torch
+          pip install ruff
+
+      - name: Lint
+        run: ruff check .
+
+      # Each project exits non-zero if its correctness gate trips.
+      - name: Run every project
+        run: python run_all.py

@@ -41,35 +41,58 @@ onto separate workers so they stop fighting.
 ## Running
 
 ```powershell
-cd 01-kv-cache;               python KV_Cache.py
-cd ..\02-continuous-batching; python InFlight_Batching.py
-cd ..\03-paged-attention;     python PagedAttention.py
-cd ..\04-vllm-architecture;   python vLLM_Architecture.py
+pip install -r requirements.txt
+python run_all.py          # every project, ~3 minutes
+```
+
+Or one at a time, from inside its folder:
+
+```powershell
+cd 01-kv-cache;                   python KV_Cache.py
+cd ..\02-continuous-batching;     python InFlight_Batching.py
+cd ..\03-paged-attention;         python PagedAttention.py
+cd ..\04-vllm-architecture;       python vLLM_Architecture.py
 cd ..\05-speculative-decoding;    python speculative_decoding.py
-cd ..\06-quantization;        python quantization.py
-cd ..\07-prefix-caching;      python prefix_caching.py
-cd ..\08-benchmark-harness;   python benchmark.py
+cd ..\06-quantization;            python quantization.py
+cd ..\07-prefix-caching;          python prefix_caching.py
+cd ..\08-benchmark-harness;       python benchmark.py
 cd ..\09-fused-paged-attention;   python fused_paged_attention.py
 cd ..\10-disaggregated-serving;   python disaggregated.py
 ```
 
-Requires PyTorch (tested on 2.12, CPU). Every folder is standalone — a few small
-tensor helpers are repeated on purpose so you can lift a folder out and it still
-runs. CUDA and bfloat16 are picked up automatically when a GPU is present.
+Needs Python 3.10+ and PyTorch (tested on 3.12 / torch 2.12, CPU). Every folder is
+standalone — a few small tensor helpers are repeated on purpose so you can lift a
+folder out and it still runs. CUDA and bfloat16 are picked up automatically when a
+GPU is present.
 
 Projects 05 and 06 train a small model for ~20 seconds first, on a synthetic
 phrase language. That isn't decoration: acceptance rate and quantization error are
 both meaningless on random weights, because untrained models agree at chance and
 their distributions are too flat for rounding to change anything.
 
+## Verifying
+
+Every project ends in a check that **exits non-zero when it fails**, so the demos
+double as the test suite:
+
+| Project | Gate |
+|---|---|
+| 01–05, 07, 10 | generated tokens must be identical to the unoptimised path |
+| 06 | int8 must keep ≥99.9% of argmaxes and KL < 10⁻³ |
+| 08 | no request may be dropped at any offered load |
+| 09 | streaming attention must match the reference to < 10⁻⁵ |
+
+`python run_all.py` runs all ten from inside their own folders — which also proves
+each is standalone — and fails the build if any returns non-zero. CI runs the same
+thing plus `ruff check .` on every push.
+
 ## Reading the output
 
-Most demos print an `identical output` line. Nearly every optimisation here
-changes the *cost* of generation and not the answer, so that line is the real
-test — if a mask, a block table, a rollback or an all-reduce is wrong, the tokens
-diverge and it prints `False`.
+Nearly every optimisation here changes the *cost* of generation and not the
+answer, which is why so many of the gates are exact equality. If a mask, a block
+table, a rollback, a copy-on-write or an all-reduce is wrong, the tokens diverge.
 
 Project 06 is the deliberate exception. Quantization changes the answer by
 construction, so it reports **top-1 agreement** and **KL divergence** against fp32
 instead. Project 09 reports max absolute error, which sits at fp32 rounding
-because the online-softmax recurrence is exact.
+because the online-softmax recurrence is exact rather than approximate.

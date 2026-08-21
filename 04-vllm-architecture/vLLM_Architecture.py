@@ -860,7 +860,7 @@ def main():
 
     print(f"{'':<18}{'wall':>8}{'tok/s':>8}{'steps':>7}{'peak':>6}{'preempt':>9}"
           f"{'recomp':>8}{'swap out':>10}{'swap in':>9}{'CoW':>5}{'hits':>6}")
-    for (engine, stats), cfg in zip(results, configs):
+    for engine, stats in results:
         sched = engine.scheduler
         cow = engine.workers[0].cache_engine.blocks_copied
         print(f"{stats.label:<18}{stats.wall_time:>7.2f}s{stats.throughput:>8.1f}"
@@ -871,9 +871,10 @@ def main():
     print()
 
     reference = results[0][1].outputs
-    print(f"identical output    : {all(s.outputs == reference for _, s in results)}")
-    print(f"  tp=1 vs tp=2 agree -> the head sharding and all-reduce are correct")
-    print(f"  recompute vs swap  -> the block tables survive eviction either way")
+    identical = all(s.outputs == reference for _, s in results)
+    print(f"identical output    : {identical}")
+    print("  tp=1 vs tp=2 agree -> the head sharding and all-reduce are correct")
+    print("  recompute vs swap  -> the block tables survive eviction either way")
     print()
 
     engine, stats = results[2]
@@ -889,6 +890,9 @@ def main():
           f"{percentile(stats.ttft, 99):.2f}s")
     print(f"prefill / decode    : {stats.prefill_tokens} tokens prefilled, "
           f"{stats.decode_tokens} decoded over {stats.steps} steps")
+
+    if not identical:
+        raise SystemExit("a config diverged; sharding, swapping or CoW is wrong")
 
 
 if __name__ == "__main__":

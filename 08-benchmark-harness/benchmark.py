@@ -366,6 +366,10 @@ def main():
     print("because the batch is already full, so the only thing the extra arrivals")
     print("buy is waiting. A benchmark that prints tokens/sec alone cannot see it.")
 
+    dropped = [r.rate for r in reports if len(r.completed) != num_requests]
+    if dropped:
+        raise SystemExit(f"requests went missing at offered rates {dropped}")
+
 
 if __name__ == "__main__":
     main()

@@ -246,7 +246,7 @@ class PagedLM(nn.Module):
     def forward(self, input_ids, caches, block_tables, slot_mapping, positions):
         """Returns [n, vocab] -- logits for each row's final position only."""
         x = self.token_emb(input_ids) + self.pos_emb(positions)
-        for block, cache in zip(self.blocks, caches):
+        for block, cache in zip(self.blocks, caches, strict=True):
             x = block(x, cache, block_tables, slot_mapping, positions)
         return self.lm_head(self.ln_f(x[:, -1]))
 
@@ -616,6 +616,9 @@ def main():
           f"{slot_bytes / paged_bytes:.1f}x more memory for the same work")
     print(f"same budget holds  : {tight.max_concurrent} sequences paged vs "
           f"{runs[1][0].num_blocks * BLOCK_SIZE // max_seq_len} with fixed slots")
+
+    if baseline.outputs != tight.outputs:
+        raise SystemExit("paging changed the output; eviction or copy-on-write is wrong")
 
 
 if __name__ == "__main__":
