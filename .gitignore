@@ -4,3 +4,11 @@ __pycache__/
 # transient terminal capture
 stdout.txt
 stderr.txt
+
+# downloaded sample databases and generated agent state
+data/
+checkpoints/
+*.db
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
